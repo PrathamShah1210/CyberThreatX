@@ -1,0 +1,12 @@
+config.json
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+*.dump
+*.backup
+*.copy
+*.zip
+.DS_Store
