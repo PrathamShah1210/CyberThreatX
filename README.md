@@ -1,76 +1,69 @@
-# CyberThreatX
+# CyberThreatX — public intelligence, analyst desk and administration
 
-A PostgreSQL threat-intelligence workspace with individual logins, administrator / analyst / viewer access, private research tools, CISA KEV ingestion and six SQL reporting views.
+The public homepage searches published IP, domain, URL and file-hash observations, with source evidence and explicit unknown/conflicting results. Selected files are hashed locally in the browser (SHA-256, up to 100 MB); file contents are not uploaded or executed. No target URLs are fetched.
 
-## Upgrade your existing Mac installation
+## Update the existing Mac folder
 
-This repository extends the original 26-table PostgreSQL edition. It does not connect to the older hosted D1 website. Keep your current application folder and database until you have verified the upgrade.
-
-1. Back up your `cyberthreatx` database in pgAdmin (Custom format, schema and data). Do not commit backups or credentials.
-2. Clone this repository into a **new folder**, e.g. `git clone https://github.com/PrathamShah1210/CyberThreatX.git CyberThreatX-v2`.
-3. Copy your existing application's `config.json` into that new folder locally. This file contains credentials; keep it private. If you do not copy it, setup will ask for your existing PostgreSQL connection and initial website administrator login.
-4. In that folder run `bash start.command`. It installs dependencies, runs an additive transactional migration, and starts on http://127.0.0.1:8001. Stop the previous process first, or use `PORT=8002 bash start.command`.
-5. Sign in with your existing website administrator credentials. The initial migration copies that password hash into `ctx_accounts` once. Later account changes are made in the Accounts screen, not config.json.
-6. Create individual analyst and viewer accounts in **Accounts**. Use **Imports → Synchronize CISA KEV** to load public intelligence, then **Reports** to view it.
-
-The migration runs inside a transaction and can be rerun. It adds five `ctx_` tables, an incident-assignment column, indexes, and six views. It does not drop tables, overwrite existing vulnerabilities or insert fictional incidents. The legacy `users` table remains a project directory; `ctx_accounts` is the website authentication principal. Keeping these separate avoids converting imported directory contacts into login accounts.
-
-## Role access
-
-| Capability | Admin | Analyst | Viewer |
-|---|---|---|---|
-| Intelligence tables / search / CSV | Yes | Yes | No |
-| Create and edit intelligence | Yes | Yes | No |
-| Delete intelligence | Yes | No | No |
-| Directory tables and accounts | Yes | No | No |
-| Public CISA intelligence view | Yes | Yes | Yes |
-| Internal SQL reports | Yes | Yes | No |
-| Private notes / bookmarks / searches / watchlist / review queue | Own | Own | Own |
-| Feed synchronization and audit log | Yes | No | No |
-
-Backend permissions apply to direct API calls and exports, not just navigation. Account changes revoke existing sessions. At least one active administrator must remain. Sessions use HttpOnly, SameSite cookies and CSRF checks. Login throttling is process-local, appropriate for the default single-server installation; distributed deployment needs shared throttling.
-
-## Real intelligence
-
-The importer uses the CISA Known Exploited Vulnerabilities JSON feed:
-https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
-
-Source catalogue: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
-
-CVE IDs deduplicate records. Existing descriptions and severity classifications are preserved; new records use `Unknown` severity rather than inventing CVSS. KEV metadata retains vendor, product, required action, catalogue dates, original JSON and import timestamp. A feed error rolls back the import and records a failed run. Synchronization is manually initiated; no scheduler is installed.
-
-If your environment cannot download the feed, obtain the JSON from CISA and run:
+Back up your database first. Stop the running server, then from your current Git checkout:
 
 ```bash
-.venv/bin/python manage.py import-kev --file /path/to/known_exploited_vulnerabilities.json
+git pull --ff-only origin main
+PORT=8003 bash start.command
 ```
 
-Watchlist matching uses case-insensitive product/vendor text, not version analysis. A match is a research lead, not proof your installation is affected. Public feed records are not automatically converted into personal security incidents. Existing demo data is not relabelled as real intelligence.
+Alternatively run `bash update.command`. Neither command discards local changes. If Git reports a conflict, preserve your edits and resolve it before restarting. `config.json` remains private and untracked.
 
-## SQL views
+Public portal: http://127.0.0.1:8003/
+Staff / personal workspace: http://127.0.0.1:8003/workspace
 
-- `vw_vulnerability_summary`: vulnerability records, incident counts, KEV context.
-- `vw_active_incidents`: open incidents and assigned account name.
-- `vw_ioc_context`: IOC, threat and source context.
-- `vw_campaign_overview`: campaigns with actor counts.
-- `vw_analyst_workload`: open incident counts per account.
-- `vw_viewer_intelligence`: imported public KEV records without internal incidents or notes.
+The startup migration is additive. It preserves existing intelligence and accounts, adds public catalog/observations/review/source-control tables and stages existing CISA records privately. It does **not** automatically publish internal records. There is no migration rollback command; restore the verified backup into a separate database if recovery is needed.
 
-Views are reusable queries, not a substitute for API authorization. Database connections are server-side using one configured DB principal. This release does not create one PostgreSQL login per website user or use PostgreSQL RLS. Do not share the configured DB credentials with website users. Audit history currently covers API intelligence changes, account changes and online imports; direct SQL edits in pgAdmin are not audited by this application.
+## Get real records into the public portal
 
-## Recovery and backups
+1. Admin → Sources → Load sourced starter collection (five real historical references; works without downloading a feed).
+2. Admin → Sources → synchronize CISA and MITRE for broader coverage when network access is available.
+3. Analyst → Desk → review source evidence and move approved records to Ready.
+4. Admin → Desk → Ready → Publish.
+5. Open the public portal without signing in. Review DATA_SOURCES.md for IOC CSV ingestion and source terms.
+
+Actors/campaigns are not IOCs. To get positive file/IP/URL matches, import **sourced indicator observations** and publish them. Arbitrary existing IOC values are not automatically labelled malicious. Public submissions enter review as unknown.
+
+## Portal responsibilities
+
+- Public: published intelligence search/browse, source references, relationships, exact IOC lookup and suspicious-indicator submissions. No login needed.
+- Analyst: incoming/review/ready queues, sourced records, verdicts, review notes, duplicates/rejections, original database tools and private research.
+- Admin: user accounts, roles, source enable/disable, synchronization, publication/withdrawal and audit history.
+- Signed-in Viewer: public intelligence and private research; no internal table access.
+
+See DATA_SOURCES.md for source details and VALIDATION.md for tested behavior and limits.
+
+## First installation
+
+Requires Python 3.10+ and PostgreSQL. Use the existing CyberThreatX database. Keep `config.json` in the project folder locally, or let `bash start.command` ask for the connection details and initial administrator login. For an empty database only, apply `database/schema.sql` before setup. The original 45,206-row export is not distributed in this repository.
+
+## Data and permissions
+
+The original 26 tables remain, with ten extension tables for accounts, research, source observations and publication. This release therefore has 36 application tables. Imported source metadata and supported relationships populate the corresponding legacy intelligence tables as well as the publication catalog. Accounts, incidents and private records are created through actual use rather than fabricated to fill a table.
+
+Backend authorization applies to reads, writes and CSV exports. Analysts can edit intelligence but cannot delete core records, manage accounts or publish. Viewers cannot access internal tables. Each account's notes and watchlists are private. At least one administrator must remain active. Role/password changes revoke active sessions.
+
+Published catalog data is a separate editorial snapshot. Existing legacy rows do not automatically become public or receive a malicious verdict. The six SQL reporting views remain available; the viewer-intelligence view includes only published CISA items. The application uses one server-side PostgreSQL connection principal; website roles are not separate PostgreSQL logins. SQL views do not replace API permissions.
+
+## Backup and account recovery
 
 ```bash
-.venv/bin/python manage.py reset-login
 .venv/bin/python manage.py backup --file /private/path/cyberthreatx.dump
+.venv/bin/python manage.py reset-login
 ```
 
-`pg_dump` must be installed for the backup command. To verify a backup, restore it into a **separate empty database**, using pgAdmin Restore or `pg_restore --no-owner -d cyberthreatx_restore_check /private/path/cyberthreatx.dump`. Compare row counts and start the application using a separate local configuration. Never test restore against your working database. Backup restoration has not been exercised in this workspace.
+Backup requires `pg_dump`. Test restore into a **separate empty database**, using pgAdmin Restore or `pg_restore --no-owner -d cyberthreatx_restore_check /private/path/cyberthreatx.dump`. Never test a restore against the working database. Backup restoration was not exercised here.
 
-## Development and verification
+## Operational boundaries
 
-Python 3.10+ and PostgreSQL are required. `requirements.txt` pins the application dependencies. `database/schema.sql` is the original schema for an empty database only. Your 45,206-row export is deliberately not published to GitHub. For a new empty installation, apply schema.sql before running setup; import your own vulnerability data or use the CISA feed after migration.
+Default binding is localhost on port 8003. Before internet hosting, configure HTTPS, secure cookies, shared rate limiting and restricted database credentials. Rate limits in this release are process-local. Public lookup requests contain the submitted indicator and are sent only to your own backend; files stay in the browser. Evidence remains metadata, not uploaded files.
 
-`tests/upgrade.py` expects a disposable database with the original schema and the original 45,206-row export. It tests migration repeatability, preservation, role restrictions, CSRF, private ownership, session revocation, views, import deduplication and rollback. Do not run it against your working database.
+Audit history covers API mutations and editorial actions. Direct pgAdmin edits are not captured. Feed runs record successes/failures. No background scheduler is installed; DATA_SOURCES.md explains CLI scheduling. The app downloads only fixed intelligence-source URLs, never user-submitted target URLs. Indicator checks are historical reputation lookups, not behavioral malware analysis.
 
-This is a local application, not an internet-ready hosted deployment. Before remote access, configure HTTPS, secure cookies, restricted DB credentials and shared operational monitoring. Evidence remains metadata rather than uploaded file storage.
+## Tests
+
+`tests/public_portal.py` runs only on a disposable database containing the original schema. The GitHub Actions workflow uses PostgreSQL 16 with a synthetic CI fixture. `tests/upgrade.py` additionally expects the original 45,206-row export. Neither test should run against your working database. See VALIDATION.md for observed results and remaining limits.

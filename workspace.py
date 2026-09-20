@@ -66,7 +66,7 @@ def install(app,config,connect,protected):
  @protected
  def matches():
   with connect(config) as c:
-   rows=c.execute("""SELECT DISTINCT k.cve_id,k.vendor,k.product,k.required_action,k.source_url FROM ctx_research r JOIN ctx_kev k ON position(lower(r.title) in lower(k.vendor||' '||k.product))>0 WHERE r.owner_id=%s AND r.kind='watchlist' ORDER BY k.cve_id DESC LIMIT 100""",(session['account_id'],)).fetchall()
+   rows=c.execute("""SELECT DISTINCT k.cve_id,k.vendor,k.product,k.required_action,k.source_url FROM ctx_research r JOIN ctx_kev k ON position(lower(r.title) in lower(k.vendor||' '||k.product))>0 WHERE r.owner_id=%s AND r.kind='watchlist' AND (%s OR EXISTS(SELECT 1 FROM ctx_catalog c WHERE c.external_key='cisa:'||k.cve_id AND c.state='published')) ORDER BY k.cve_id DESC LIMIT 100""",(session['account_id'],session['role']!='viewer')).fetchall()
   return jsonify(rows=rows,note='Possible product-name matches. Verify the affected version and configuration in the original advisory.')
  @app.get('/api/reports/<name>')
  @protected
@@ -94,7 +94,8 @@ def install(app,config,connect,protected):
    if len(raw)>12_000_000: raise ValueError('Feed exceeds size limit.')
    payload=json.loads(raw)
    with connect(config) as c:
-    count=ingest_kev(c,payload)
+    from feeds import stage_kev
+    count=stage_kev(c,payload)
     c.execute("UPDATE ctx_import_runs SET status='success',finished_at=now(),records=%s WHERE id=%s",(count,run))
     audit(c,'import','CISA KEV',{'records':count})
    return jsonify(ok=True,records=count)

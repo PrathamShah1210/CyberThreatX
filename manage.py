@@ -3,7 +3,7 @@ import argparse,getpass,json,os,subprocess
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 from app import read_config,connect
-from workspace import ingest_kev
+from feeds import stage_kev as ingest_kev
 p=argparse.ArgumentParser();p.add_argument('action',choices=['reset-login','backup','import-kev']);p.add_argument('--file');a=p.parse_args();config=read_config()
 if a.action=='reset-login':
  username=input('Existing website username: ').strip()

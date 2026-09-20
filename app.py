@@ -114,6 +114,11 @@ def create_app(config=None):
             return fn(*args, **kwargs)
         return inner
 
+    @app.before_request
+    def json_object_only():
+        if request.is_json and request.method in ('POST','PUT','DELETE') and not isinstance(request.get_json(silent=True),dict):
+            return jsonify(error='Expected a JSON object.'),400
+
     @app.after_request
     def headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -143,6 +148,10 @@ def create_app(config=None):
 
     @app.get('/')
     def home():
+        return send_from_directory(ROOT / 'static', 'public.html')
+
+    @app.get('/workspace')
+    def workspace_home():
         return send_from_directory(ROOT / 'static', 'index.html')
 
     @app.get('/api/session')
@@ -320,10 +329,14 @@ def create_app(config=None):
         return jsonify(error='Record or endpoint not found.'),404
 
     install(app,config,connect,protected)
+    from intelligence import install as install_intelligence
+    from feeds import install as install_feeds
+    install_intelligence(app,config,connect,protected)
+    install_feeds(app,config,connect,protected)
     return app
 
 
 if __name__ == '__main__':
     from waitress import serve
-    print('CyberThreatX running (default URL http://127.0.0.1:8001)', flush=True)
-    serve(create_app(),host='127.0.0.1',port=int(os.environ.get('PORT','8001')),threads=4)
+    print('CyberThreatX running (default URL http://127.0.0.1:8003)', flush=True)
+    serve(create_app(),host='127.0.0.1',port=int(os.environ.get('PORT','8003')),threads=4)

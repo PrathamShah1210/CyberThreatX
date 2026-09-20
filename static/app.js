@@ -20,14 +20,14 @@ async function initialize(){
   const s=await api('session');state.csrf=s.csrf;state.role=s.role;state.username=s.username;
   if(!s.authenticated){showLogin();return;}
   const result=await api('schema');state.schema=Object.fromEntries(result.tables.map(t=>[t.name,t]));
-  $('login').hidden=true;$('workspace').hidden=false;buildNav();document.querySelector('.sidebar-foot strong').textContent=state.username;document.querySelector('.sidebar-foot span').textContent=title(state.role);await (state.role==='viewer'?workspacePage('reports'):navigate(null));
+  $('login').hidden=true;$('workspace').hidden=false;buildNav();document.querySelector('.sidebar-foot strong').textContent=state.username;document.querySelector('.sidebar-foot span').textContent=title(state.role);await (state.role==='viewer'?workspacePage('research'):workspacePage('desk'));
  }catch(e){$('login-error').textContent=e.message;showLogin();}
 }
 function buildNav(){
  const nav=$('navigation');nav.replaceChildren();
  const add=(table,label)=>{const b=el('button',label);b.dataset.table=table||'';b.onclick=()=>navigate(table);nav.append(b);};
  if(state.role!=='viewer')add(null,'Overview');
- for(const page of ['research','reports',...(state.role==='admin'?['accounts','imports','audit']:[])]){const b=el('button',title(page));b.onclick=()=>workspacePage(page);nav.append(b);}
+ for(const page of ['public',...(state.role!=='viewer'?['desk']:[]),'research','reports',...(state.role==='admin'?['accounts','sources','imports','audit']:[])]){const b=el('button',title(page));b.onclick=()=>workspacePage(page);nav.append(b);}
  const groups={Intelligence:['incidents','vulnerabilities','iocs','threats','threat_actors','campaigns','sources'],Relationships:['incident_ioc','incident_vuln','actor_campaign','targets'],Evidence:['security_incidents','data_breaches','malware_incidents','attachments','attachment_hashes','threat_actor_aliases','campaign_objectives','source_urls','data_breach_datatypes','m_att_sys'],People:['users','roles','permissions','user_role','user_phones']};
  for(const [group,tables]of Object.entries(groups)){const visible=tables.filter(t=>state.schema[t]);if(visible.length)nav.append(el('h3',group));visible.forEach(t=>add(t,title(t)));}
 }
@@ -122,10 +122,13 @@ initialize();
 
 // Personal workspace, reports and administration use the same authenticated API.
 async function workspacePage(page){
+ if(page==='public'){window.location.href='/';return;}
  state.table=null;state.generation++;$('dashboard').hidden=true;$('records').hidden=true;$('extras').hidden=false;$('extras').replaceChildren();$('title').textContent=title(page);$('subtitle').textContent='Signed in as '+state.username+' · '+state.role;$('notice').hidden=true;
  const root=$('extras');
  const button=(text,fn)=>{const b=el('button',text,'secondary');b.onclick=async()=>{try{await fn();}catch(e){notice(e.message,true);}};return b;};
  const listing=(rows,action)=>{const wrap=el('div',undefined,'table-wrap panel'),t=el('table');if(!rows.length){root.append(el('p','Nothing here yet.','empty'));return;}const h=el('tr');Object.keys(rows[0]).forEach(k=>h.append(el('th',title(k))));if(action)h.append(el('th','Actions'));t.append(h);rows.forEach(r=>{const tr=el('tr');Object.values(r).forEach(v=>tr.append(el('td',v===null?'—':typeof v==='object'?JSON.stringify(v):String(v))));if(action){const td=el('td');action(r,td);tr.append(td);}t.append(tr);});wrap.append(t);root.append(wrap);};
+ if(page==='desk'){await intelligenceDesk();return;}
+ if(page==='sources'){await sourceManagement();return;}
  if(page==='research'){
   const form=el('form',undefined,'panel research-form'),kind=el('select');for(const k of ['watchlist','bookmark','note','search','review']){const o=el('option',title(k));o.value=k;kind.append(o);}const name=el('input');name.placeholder='Title / technology name';name.required=true;name.maxLength=200;const content=el('textarea');content.placeholder='Notes, CVE identifier, or saved search text';const submit=el('button','Save to my workspace','primary');submit.type='submit';form.append(kind,name,content,submit);form.onsubmit=async e=>{e.preventDefault();try{await api('research',{method:'POST',body:JSON.stringify({kind:kind.value,title:name.value,content:content.value})});await workspacePage(page);}catch(e){notice(e.message,true);}};root.append(form);
   const data=await api('research');listing(data.rows,(r,td)=>{td.append(button('Delete',async()=>{await api('research',{method:'DELETE',body:JSON.stringify({id:r.id})});await workspacePage(page);}));if(r.kind==='review')td.append(button(r.status==='done'?'Reopen':'Complete',async()=>{await api('research',{method:'PUT',body:JSON.stringify({id:r.id,status:r.status==='done'?'open':'done'})});await workspacePage(page);}));if(r.kind==='search'&&state.role!=='viewer')td.append(button('Run search',async()=>{await navigate('vulnerabilities');$('search').value=r.content||r.title;state.q=$('search').value;await reload();}));});

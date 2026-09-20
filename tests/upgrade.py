@@ -48,7 +48,7 @@ check(v.delete('/api/research',json={'id':note},headers=vh).status_code==404,'ow
 check(v.post('/api/research',json={'kind':'watchlist','title':'Example'},headers=vh).status_code==200,'viewer watchlist')
 fixture={'vulnerabilities':[{'cveID':'CVE-2099-99999','vendorProject':'Example','product':'Test product','shortDescription':'Test fixture only','requiredAction':'Review test advisory','dateAdded':'2026-01-01'}]}
 with connect(config) as c: ingest_kev(c,fixture);ingest_kev(c,fixture)
-check(len(v.get('/api/watchlist-matches').json['rows'])==1,'deduplicated watchlist match')
+check(len(v.get('/api/watchlist-matches').json['rows'])==0,'unpublished watchlist match hidden from viewer')
 with connect(config) as c:
  check(c.execute("SELECT count(*) AS n FROM vulnerabilities WHERE cve_id='CVE-2099-99999'").fetchone()['n']==1,'import idempotent')
 try:

@@ -1,0 +1,36 @@
+name: PostgreSQL portal checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  portal:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: ctx_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      CTX_TEST_DSN: postgresql://postgres:test-only-password@localhost:5432/ctx_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Prepare disposable schema
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          from pathlib import Path
+          with psycopg.connect(os.environ['CTX_TEST_DSN']) as c:
+              c.execute(Path('database/schema.sql').read_text())
+              c.execute("INSERT INTO vulnerabilities(cve_id,description,severity) VALUES ('CVE-2099-10000','CI fixture only','Unknown')")
+          PY
+      - run: python tests/public_portal.py
+      - run: node --check static/public.js && node --check static/desk.js && node --check static/app.js
