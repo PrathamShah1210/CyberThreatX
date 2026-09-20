@@ -105,4 +105,9 @@ check(look('gx7ekbenv2riucmf.onion')['result']=='recorded_malicious','unchanged 
 with connect(config) as c:
  stage(c,'starter:wcry-c2','indicator','gx7ekbenv2riucmf.onion','Changed test source snapshot','Secureworks CTU (Sophos)','https://www.sophos.com/en-us/research/wcry-ransomware-analysis',{'changed':True})
 check(look('gx7ekbenv2riucmf.onion')['result']=='no_matching_intelligence','changed feed requires rereview')
+check(a.post('/api/logout',headers={'Content-Type':'application/json'}).status_code==403,'empty logout still requires CSRF')
+check(a.post('/api/logout',headers={**h,'Content-Type':'application/json'}).status_code==200,'browser empty-body logout')
+check(a.get('/api/session').json['authenticated'] is False,'logout clears session')
+check(a.get('/api/accounts').status_code==401,'logout blocks protected reads')
+check(anon.post('/api/public/lookup',data='null',headers={**ah,'Content-Type':'application/json'}).status_code==400,'explicit null JSON rejected')
 print(f'{checks} public portal checks passed')
