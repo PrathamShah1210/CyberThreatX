@@ -116,7 +116,7 @@ def create_app(config=None):
 
     @app.before_request
     def json_object_only():
-        if request.is_json and request.method in ('POST','PUT','DELETE') and not isinstance(request.get_json(silent=True),dict):
+        if request.is_json and request.method in ('POST','PUT','DELETE') and request.get_data(cache=True) and not isinstance(request.get_json(silent=True),dict):
             return jsonify(error='Expected a JSON object.'),400
 
     @app.after_request
